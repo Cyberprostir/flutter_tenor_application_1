@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart' as path;
+import 'databasehelper.dart';
 
 const String APIKey = 'LIVDSRZULELA';
 const String searchEndpoint = 'https://g.tenor.com/v1/search';
