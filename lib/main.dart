@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart' as path;
-import 'databasehelper.dart';
+
+import 'database_helper.dart';
+import 'favorites_page.dart';
 
 const String APIKey = 'LIVDSRZULELA';
 const String searchEndpoint = 'https://g.tenor.com/v1/search';
@@ -25,6 +25,9 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.green,
       ),
       home: GifSearchHomePage(),
+      routes: {
+        FavoritesPage.routeName: (context) => FavoritesPage(),
+      },
     );
   }
 }
@@ -61,6 +64,7 @@ class _GifSearchHomePageState extends State<GifSearchHomePage> {
         }
         nextPos = data['next'];
       });
+      print('I will print details here: $gifs *the END  OF PRINT');
     } else {
       print('Error searching GIFs: ${response.statusCode}');
     }
@@ -80,6 +84,32 @@ class _GifSearchHomePageState extends State<GifSearchHomePage> {
       print(
           'Error retrieving autocomplete suggestions: ${response.statusCode}');
     }
+  }
+
+  void addToFavorites(Map<String, dynamic> gif) async {
+    Map<String, dynamic> favGif = {};
+    favGif['id'] = gif['id'];
+    favGif['gif_url'] = gif['media'][0]['gif']['url'];
+    favGif['tinygif_url'] = gif['media'][0]['tinygif']['url'];
+    print("What is in favgif: $favGif");
+    await DatabaseHelper.saveFavoriteGif(favGif);
+    setState(() {
+      gif['isFavorite'] = true;
+    });
+  }
+
+  void removeFromFavorites(Map<String, dynamic> gif) async {
+    final String id = gif['id'];
+    await DatabaseHelper.deleteFavoriteGif(id);
+    setState(() {
+      gif['isFavorite'] = false;
+    });
+  }
+
+  Future<bool> isFavorite(String id) async {
+    final List<Map<String, dynamic>> favoriteGifs =
+        await DatabaseHelper.getFavoriteGifs();
+    return favoriteGifs.any((gif) => gif['id'] == id);
   }
 
   @override
@@ -161,6 +191,7 @@ class _GifSearchHomePageState extends State<GifSearchHomePage> {
                 final gif = gifs[index];
                 final previewUrl = gif['media'][0]['tinygif']['url'];
                 final fullScreenUrl = gif['media'][0]['gif']['url'];
+                final isFavorite = gif['isFavorite'] ?? false;
 
                 return GestureDetector(
                   onTap: () {
@@ -176,28 +207,47 @@ class _GifSearchHomePageState extends State<GifSearchHomePage> {
                     color: Colors.white,
                     child: Column(
                       children: [
-                        AspectRatio(
-                          aspectRatio: 4 / 3,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8.0),
-                            child: CachedNetworkImage(
-                              imageUrl: previewUrl,
-                              placeholder: (context, url) =>
-                                  CircularProgressIndicator(),
-                              errorWidget: (context, url, error) =>
-                                  Icon(Icons.error),
-                              fit: BoxFit.cover,
+                        Expanded(
+                          child: AspectRatio(
+                            aspectRatio: 4 / 3,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8.0),
+                              child: CachedNetworkImage(
+                                imageUrl: previewUrl,
+                                placeholder: (context, url) =>
+                                    CircularProgressIndicator(),
+                                errorWidget: (context, url, error) =>
+                                    Icon(Icons.error),
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
                         ),
                         Container(
                           height: 30.0,
                           width: double.infinity,
-                          child: IconButton(
-                            icon: Icon(Icons.share),
-                            onPressed: () {
-                              Share.share(fullScreenUrl);
-                            },
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.share),
+                                onPressed: () {
+                                  Share.share(fullScreenUrl);
+                                },
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  isFavorite ? Icons.star : Icons.star_border,
+                                  color: isFavorite ? Colors.yellow : null,
+                                ),
+                                onPressed: () {
+                                  if (isFavorite) {
+                                    removeFromFavorites(gif);
+                                  } else {
+                                    addToFavorites(gif);
+                                  }
+                                },
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -214,6 +264,24 @@ class _GifSearchHomePageState extends State<GifSearchHomePage> {
                       searchGifs(_searchController.text, pos: nextPos),
                 )
               : SizedBox(),
+          SizedBox(height: 16.0),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              ElevatedButton(
+                child: Text('Home'),
+                onPressed: () {
+                  Navigator.pushReplacementNamed(context, '/');
+                },
+              ),
+              ElevatedButton(
+                child: Text('Favorites'),
+                onPressed: () {
+                  Navigator.pushNamed(context, FavoritesPage.routeName);
+                },
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -223,20 +291,17 @@ class _GifSearchHomePageState extends State<GifSearchHomePage> {
 class FullSizeImagePage extends StatelessWidget {
   final String imageUrl;
 
-  const FullSizeImagePage({required this.imageUrl});
+  FullSizeImagePage({required this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Full Size Image'),
-      ),
+      appBar: AppBar(),
       body: Center(
         child: CachedNetworkImage(
           imageUrl: imageUrl,
           placeholder: (context, url) => CircularProgressIndicator(),
           errorWidget: (context, url, error) => Icon(Icons.error),
-          fit: BoxFit.contain,
         ),
       ),
     );
